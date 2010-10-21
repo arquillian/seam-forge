@@ -23,7 +23,7 @@ import org.jboss.seam.forge.test.SingletonAbstractShellTest;
 import org.junit.Before;
 
 /**
- * AbstractTestCase
+ * 
  *
  * @author <a href="mailto:aslak@redhat.com">Aslak Knutsen</a>
  * @version $Revision: $

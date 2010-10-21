@@ -42,7 +42,7 @@ import org.jboss.seam.forge.shell.plugins.RequiresFacet;
 import org.jboss.seam.forge.shell.plugins.RequiresProject;
 
 /**
- * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
+ * @author <a href="mailto:aslak@redhat.com">Aslak Knutsen</a>
  * 
  */
 @Named("new-test-profile")

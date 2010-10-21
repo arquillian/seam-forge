@@ -32,7 +32,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 /**
- * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
+ * @author <a href="mailto:aslak@redhat.com">Aslak Knutsen</a>
  * 
  */
 @RunWith(Arquillian.class)

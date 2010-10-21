@@ -39,7 +39,7 @@ import org.jboss.seam.forge.shell.plugins.MavenPlugin;
 import org.jboss.seam.forge.shell.plugins.RequiresFacet;
 
 /**
- * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
+ * @author <a href="mailto:aslak@redhat.com">Aslak Knutsen</a>
  */
 @Singleton
 @Named("arquillian")

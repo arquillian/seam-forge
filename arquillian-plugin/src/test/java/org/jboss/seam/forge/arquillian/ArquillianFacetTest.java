@@ -30,15 +30,13 @@ import java.io.File;
 import junit.framework.Assert;
 
 import org.jboss.arquillian.junit.Arquillian;
-import org.jboss.seam.forge.arquillian.ArquillianFacet;
 import org.jboss.seam.forge.project.Project;
 import org.jboss.seam.forge.shell.Shell;
-import org.jboss.seam.forge.test.SingletonAbstractShellTest;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 /**
- * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
+ * @author <a href="mailto:aslak@redhat.com">Aslak Knutsen</a>
  * 
  */
 @RunWith(Arquillian.class)

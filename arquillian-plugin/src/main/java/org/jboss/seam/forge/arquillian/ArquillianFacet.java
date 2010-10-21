@@ -31,7 +31,7 @@ import org.jboss.seam.forge.project.facets.MavenFacet;
 import org.jboss.seam.forge.project.facets.ResourceFacet;
 
 /**
- * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
+ * @author <a href="mailto:aslak@redhat.com">Aslak Knutsen</a>
  * 
  */
 public class ArquillianFacet implements Facet
