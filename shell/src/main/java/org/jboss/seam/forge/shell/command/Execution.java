@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,9 +19,9 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.command;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.Set;
 
@@ -31,9 +31,10 @@ import javax.enterprise.inject.spi.BeanManager;
 import javax.inject.Inject;
 
 import org.jboss.seam.forge.shell.Shell;
+import org.jboss.seam.forge.shell.constraint.ConstraintEnforcer;
+import org.jboss.seam.forge.shell.constraint.ConstraintException;
 import org.jboss.seam.forge.shell.exceptions.CommandExecutionException;
 import org.jboss.seam.forge.shell.exceptions.NoSuchCommandException;
-import org.jboss.seam.forge.shell.plugins.Option;
 import org.jboss.seam.forge.shell.plugins.Plugin;
 import org.mvel2.DataConversion;
 import org.mvel2.util.ParseTools;
@@ -44,18 +45,31 @@ import org.mvel2.util.ParseTools;
 public class Execution
 {
    private final BeanManager manager;
-   private final Shell shell;
-
 
    private CommandMetadata command;
    private Object[] parameterArray;
    private String originalStatement;
 
    @Inject
-   public Execution(BeanManager manager, Shell shell)
+   public Execution(final BeanManager manager)
    {
       this.manager = manager;
-      this.shell = shell;
+   }
+
+   public void verifyConstraints(final Shell shell)
+   {
+      ConstraintEnforcer enforcer = new ConstraintEnforcer();
+      if (command != null)
+      {
+         try
+         {
+            enforcer.verifyAvailable(shell.getCurrentProject(), command.getPluginMetadata());
+         }
+         catch (ConstraintException e)
+         {
+            throw new CommandExecutionException(command, e);
+         }
+      }
    }
 
    @SuppressWarnings("unchecked")
@@ -64,13 +78,13 @@ public class Execution
       if (command != null)
       {
          Class<? extends Plugin> pluginType = command.getPluginMetadata().getType();
+
          Set<Bean<?>> beans = manager.getBeans(pluginType);
          Bean<?> bean = manager.resolve(beans);
 
          Method method = command.getMethod();
 
          Class<?>[] parmTypes = method.getParameterTypes();
-         Annotation[][] parmAnnotations = method.getParameterAnnotations();
          Object[] paramStaging = new Object[parameterArray.length];
 
          for (int i = 0; i < parmTypes.length; i++)
@@ -82,11 +96,12 @@ public class Execution
                {
                   paramStaging[i] = false;
                }
-            } catch (Exception e)
+            }
+            catch (Exception e)
             {
                throw new CommandExecutionException(command, "command option '"
-                     + command.getOrderedOptionByIndex(i).getDescription()
-                     + "' must be of type '" + parmTypes[i].getSimpleName() + "'");
+                        + command.getOrderedOptionByIndex(i).getDescription()
+                        + "' must be of type '" + parmTypes[i].getSimpleName() + "'");
             }
          }
 
@@ -94,7 +109,7 @@ public class Execution
          if (bean != null)
          {
             CreationalContext<? extends Plugin> context = (CreationalContext<? extends Plugin>) manager
-                  .createCreationalContext(bean);
+                     .createCreationalContext(bean);
             if (context != null)
             {
                plugin = (Plugin) manager.getReference(bean, pluginType, context);
@@ -102,33 +117,22 @@ public class Execution
                try
                {
                   command.getMethod().invoke(plugin, paramStaging);
-               } catch (Exception e)
+               }
+               catch (Exception e)
                {
                   throw new CommandExecutionException(command, e);
                }
             }
          }
-      } else
+      }
+      else
       {
          // TODO it would be nice if this delegated to the system shell
          throw new NoSuchCommandException(command, "No such command: " + originalStatement);
       }
    }
 
-   private static Option getOptionMetadata(Annotation[] annos)
-   {
-      for (Annotation a : annos)
-      {
-         if (a instanceof Option)
-         {
-            return (Option) a;
-         }
-      }
-
-      return null;
-   }
-
-   private static boolean isBooleanOption(Class<?> type)
+   private static boolean isBooleanOption(final Class<?> type)
    {
       return ParseTools.unboxPrimitive(type) == boolean.class;
    }
@@ -161,6 +165,12 @@ public class Execution
    public void setOriginalStatement(final String originalStatement)
    {
       this.originalStatement = originalStatement;
+   }
+
+   @Override
+   public String toString()
+   {
+      return "Execution [" + originalStatement + "]";
    }
 
 }

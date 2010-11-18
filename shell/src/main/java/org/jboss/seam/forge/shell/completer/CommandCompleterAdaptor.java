@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,13 +19,12 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.completer;
 
-import java.util.List;
-
-import org.jboss.seam.forge.shell.completer.CommandCompleter;
-
 import jline.console.completer.Completer;
+
+import java.util.List;
 
 /**
  * Adapts the shell's {@link CommandCompleter} to JLine's {@link Completer}
@@ -51,5 +50,4 @@ public class CommandCompleterAdaptor implements Completer, CommandCompleter
       }
       return -1;
    }
-
 }

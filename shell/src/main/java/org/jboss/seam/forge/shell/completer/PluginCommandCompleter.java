@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,6 +19,7 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.completer;
 
 import java.io.File;
@@ -27,13 +28,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Queue;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
 import org.jboss.seam.forge.project.Resource;
+import org.jboss.seam.forge.project.ResourceFlag;
+import org.jboss.seam.forge.project.services.ResourceFactory;
+import org.jboss.seam.forge.project.util.PathspecParser;
 import org.jboss.seam.forge.shell.Shell;
 import org.jboss.seam.forge.shell.command.CommandMetadata;
 import org.jboss.seam.forge.shell.command.OptionMetadata;
@@ -50,7 +52,6 @@ import org.jboss.seam.forge.shell.command.parser.Tokenizer;
 
 /**
  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
- * 
  */
 @Singleton
 public class PluginCommandCompleter implements CommandCompleter
@@ -68,6 +69,9 @@ public class PluginCommandCompleter implements CommandCompleter
    @Inject
    private Shell shell;
 
+   @Inject
+   private ResourceFactory resourceFactory;
+
    private String currentBuffer = "";
    private String lastBuffer = "";
    private boolean finalTokenComplete = false;
@@ -82,9 +86,9 @@ public class PluginCommandCompleter implements CommandCompleter
       if (!tokens.isEmpty())
       {
          String pluginName = tokens.remove();
-         PluginMetadata plugin = registry.getPluginMetadata(pluginName);
+         PluginMetadata plugin = registry.getPluginMetadataForScopeAndConstraints(pluginName, shell);
 
-         if (plugin != null)
+         if ((plugin != null))
          {
             // found plugin
             if (tokens.isEmpty())
@@ -122,12 +126,12 @@ public class PluginCommandCompleter implements CommandCompleter
                   // there must be a command, or a string of arguments for the
                   // default command
                   String peek = tokens.peek();
-                  if (plugin.hasCommand(peek))
+                  if (plugin.hasCommand(peek, shell))
                   {
                      // TODO this should probably be tokenComplete`?` sensitive
                      // complete the command, remove the last token
                      String command = tokens.remove();
-                     List<String> optionCandidates = getOptionCandidates(plugin.getCommand(command), tokens);
+                     List<String> optionCandidates = getOptionCandidates(plugin.getCommand(command, shell), tokens);
                      candidates.addAll(optionCandidates);
                   }
                   else if (plugin.hasDefaultCommand())
@@ -156,11 +160,11 @@ public class PluginCommandCompleter implements CommandCompleter
                   // just one more token, it's either a command or an argument
                   // for the default command
                   String peek = tokens.peek();
-                  if (plugin.hasCommand(peek))
+                  if (plugin.hasCommand(peek, shell))
                   {
                      // complete the command, remove the last token
                      String command = tokens.remove();
-                     List<String> optionCandidates = getOptionCandidates(plugin.getCommand(command), tokens);
+                     List<String> optionCandidates = getOptionCandidates(plugin.getCommand(command, shell), tokens);
                      candidates.addAll(optionCandidates);
                   }
                   else if (couldBeCommand(plugin, peek))
@@ -219,18 +223,20 @@ public class PluginCommandCompleter implements CommandCompleter
     */
    private List<String> getPluginCandidates(final PluginRegistry registry, final String pluginBase)
    {
-      Map<String, PluginMetadata> plugins = registry.getPlugins();
+      Map<String, List<PluginMetadata>> plugins = registry.getPlugins();
 
       List<String> results = new ArrayList<String>();
-      for (Entry<String, PluginMetadata> p : plugins.entrySet())
+      for (Entry<String, List<PluginMetadata>> entry : plugins.entrySet())
       {
-         PluginMetadata pluginMeta = p.getValue();
-         if (pluginMeta.hasCommands())
+         for (PluginMetadata pluginMeta : entry.getValue())
          {
-            String pluginName = pluginMeta.getName();
-            if (isPotentialMatch(pluginName, pluginBase))
+            if (pluginMeta.hasCommands())
             {
-               results.add(pluginName + " ");
+               String pluginName = pluginMeta.getName();
+               if (isPotentialMatch(pluginName, pluginBase) && pluginMeta.constrantsSatisfied(shell))
+               {
+                  results.add(pluginName + " ");
+               }
             }
          }
       }
@@ -246,7 +252,7 @@ public class PluginCommandCompleter implements CommandCompleter
       List<String> results = new ArrayList<String>();
       if (plugin.hasCommands())
       {
-         List<CommandMetadata> commands = plugin.getCommands();
+         List<CommandMetadata> commands = plugin.getCommands(shell);
          if (tokens.isEmpty())
          {
             for (CommandMetadata command : commands)
@@ -260,7 +266,7 @@ public class PluginCommandCompleter implements CommandCompleter
                   }
                   else
                   {
-                     results.add("");
+                     // results.add("");
                   }
                }
                else
@@ -315,62 +321,39 @@ public class PluginCommandCompleter implements CommandCompleter
          }
          else
          {
-            if (valueMap.containsKey(option))
+            if (valueMap.isEmpty() || valueMap.containsKey(option))
             {
-               String value = (String) valueMap.get(option);
-               if (value == null)
+               if (isResourceAssignable(option))
                {
-                  value = "";
-               }
-               if (!option.isNamed())
-               {
-                  Matcher matcher = Pattern.compile("^.*" + value + "$").matcher(currentBuffer);
-                  if (matcher.find())
-                  {
-                     if (File.class.isAssignableFrom(option.getBoxedType())
-                              || Resource.class.isAssignableFrom(option.getBoxedType()))
-                     {
-                        FileOptionCompleter completer = new FileOptionCompleter(shell);
-                        List<CharSequence> completions = new ArrayList<CharSequence>();
-                        int offset = completer.complete(value, 0, completions);
-                        index = index - value.length();
-                        for (CharSequence charSequence : completions)
-                        {
-                           results.add(value.substring(0, offset) + String.valueOf(charSequence));
-                        }
-                     }
-                  }
-               }
+                  String[] values;
 
-               if (!option.isBoolean() && option.isNamed())
-               {
-                  Matcher matcher = Pattern.compile("^.*--" + option.getName() + "\\s*(\\S*)$").matcher(currentBuffer);
-                  if (matcher.find())
+                  if (valueMap.isEmpty())
                   {
-                     if ((value != null) && !"".equals(value))
-                     {
-                        if (File.class.isAssignableFrom(option.getBoxedType()))
-                        {
-                           FileOptionCompleter completer = new FileOptionCompleter(shell);
-                           List<CharSequence> completions = new ArrayList<CharSequence>();
-                           int offset = completer.complete(value, 0, completions);
-                           index = index - value.length();
-                           for (CharSequence charSequence : completions)
-                           {
-                              results.add(value.substring(0, offset) + String.valueOf(charSequence));
-                           }
-                        }
-                     }
-
-                     results.add("");
-                     break;
+                     values = new String[] { "" };
                   }
-               }
-               else
-               {
-                  // ignore this, we can't deal with it if they forgot the
-                  // value,
-                  // executionparser will fix it for them
+                  else if (valueMap.get(option) instanceof String[])
+                  {
+                     values = (String[]) valueMap.get(option);
+                  }
+                  else
+                  {
+                     values = new String[] { String.valueOf(valueMap.get(option)) };
+                  }
+
+                  String val = values[values.length - 1];
+
+                  for (Resource<?> r : new PathspecParser(resourceFactory, shell.getCurrentResource(), val + "*")
+                           .resolve())
+                  {
+                     // Add result to the results list, and append a '/' if the resource has children.
+                     results.add(r.getName() + (r.isFlagSet(ResourceFlag.Node) ? "/" : ""));
+                  }
+
+                  int lastNest = val.lastIndexOf(File.separatorChar);
+
+                  // Record the current index point in the buffer. If we're at the separator char
+                  // set the value ahead by 1.
+                  index = index - val.length() + (lastNest != -1 ? lastNest + 1 : 0);
                }
             }
 
@@ -425,7 +408,7 @@ public class PluginCommandCompleter implements CommandCompleter
     */
    private boolean couldBeCommand(final PluginMetadata plugin, final String potentialCommand)
    {
-      List<CommandMetadata> commands = plugin.getCommands();
+      List<CommandMetadata> commands = plugin.getCommands(shell);
       if ((commands != null) && !commands.isEmpty())
       {
          for (CommandMetadata commandMetadata : commands)
@@ -437,5 +420,11 @@ public class PluginCommandCompleter implements CommandCompleter
          }
       }
       return false;
+   }
+
+   private boolean isResourceAssignable(final OptionMetadata option)
+   {
+      return Resource[].class.isAssignableFrom(option.getBoxedType())
+               || Resource.class.isAssignableFrom(option.getBoxedType());
    }
 }

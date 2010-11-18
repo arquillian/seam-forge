@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,7 +19,10 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.plugins.builtin;
+
+import java.util.List;
 
 import javax.inject.Inject;
 import javax.inject.Named;
@@ -33,11 +36,13 @@ import org.jboss.seam.forge.shell.plugins.DefaultCommand;
 import org.jboss.seam.forge.shell.plugins.Help;
 import org.jboss.seam.forge.shell.plugins.Option;
 import org.jboss.seam.forge.shell.plugins.Plugin;
+import org.jboss.seam.forge.shell.plugins.Topic;
 
 /**
  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
  */
 @Named("help")
+@Topic("Shell Environment")
 @Help("Displays help text for specified plugins & commands.")
 public class HelpPlugin implements Plugin
 {
@@ -45,7 +50,7 @@ public class HelpPlugin implements Plugin
    Shell shell;
 
    @Inject
-   public HelpPlugin(PluginRegistry registry, Shell shell)
+   public HelpPlugin(final PluginRegistry registry, final Shell shell)
    {
       this.registry = registry;
       this.shell = shell;
@@ -57,13 +62,13 @@ public class HelpPlugin implements Plugin
       if ((tokens == null) || (tokens.length == 0))
       {
          shell.println("");
-         shell.println("Welcome to Seam Forgeype \"help {plugin} {command}\" to learn more about what this shell can do.");
+         shell.println("Welcome to Seam Forge. Type \"help {plugin} {command}\" to learn more about what this shell can do.");
          shell.println("");
       }
       else
       {
          String pluginName = tokens[0];
-         PluginMetadata plugin = registry.getPlugins().get(pluginName);
+         PluginMetadata plugin = registry.getPluginMetadataForScopeAndConstraints(pluginName, shell);
          if (plugin != null)
          {
             writePluginHelp(plugin);
@@ -71,9 +76,9 @@ public class HelpPlugin implements Plugin
             if (tokens.length >= 2)
             {
                String commandName = tokens[1];
-               if (plugin.hasCommand(commandName))
+               if (plugin.hasCommand(commandName, shell))
                {
-                  CommandMetadata command = plugin.getCommand(commandName);
+                  CommandMetadata command = plugin.getCommand(commandName, shell);
                   writeCommandHelp(command);
                }
                else
@@ -83,11 +88,12 @@ public class HelpPlugin implements Plugin
             }
             else if (tokens.length >= 1)
             {
-               if (plugin.getCommands().size() > 0)
+               List<CommandMetadata> ctxCommands = plugin.getCommands(shell);
+               if (ctxCommands.size() > 0)
                {
                   shell.println("");
                   shell.println("Commands:");
-                  for (CommandMetadata command : plugin.getCommands())
+                  for (CommandMetadata command : ctxCommands)
                   {
                      writeCommandHelp(command);
                   }

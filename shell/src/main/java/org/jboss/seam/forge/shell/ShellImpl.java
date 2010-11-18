@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Sourci
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,7 +19,12 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell;
+
+import static org.jboss.seam.forge.shell.util.Parsing.firstToken;
+import static org.jboss.seam.forge.shell.util.Parsing.firstWhitespace;
+import static org.mvel2.DataConversion.addConversionHandler;
 
 import java.io.File;
 import java.io.IOException;
@@ -45,10 +50,12 @@ import jline.console.ConsoleReader;
 import jline.console.completer.AggregateCompleter;
 import jline.console.completer.Completer;
 
+import org.fusesource.jansi.Ansi;
 import org.jboss.seam.forge.project.Project;
 import org.jboss.seam.forge.project.Resource;
-import org.jboss.seam.forge.project.facets.MavenFacet;
+import org.jboss.seam.forge.project.facets.MetadataFacet;
 import org.jboss.seam.forge.project.services.ResourceFactory;
+import org.jboss.seam.forge.project.util.ResourceUtil;
 import org.jboss.seam.forge.shell.command.Execution;
 import org.jboss.seam.forge.shell.command.ExecutionParser;
 import org.jboss.seam.forge.shell.command.PromptTypeConverter;
@@ -67,13 +74,15 @@ import org.jboss.seam.forge.shell.plugins.events.AcceptUserInput;
 import org.jboss.seam.forge.shell.plugins.events.PostStartup;
 import org.jboss.seam.forge.shell.plugins.events.Shutdown;
 import org.jboss.seam.forge.shell.plugins.events.Startup;
-import org.jboss.seam.forge.shell.project.ProjectContext;
+import org.jboss.seam.forge.shell.project.CurrentProject;
 import org.jboss.seam.forge.shell.util.Files;
+import org.jboss.seam.forge.shell.util.GeneralUtils;
+import org.jboss.seam.forge.shell.util.ShellColor;
 import org.jboss.weld.environment.se.bindings.Parameters;
+import org.mvel2.ConversionHandler;
 import org.mvel2.DataConversion;
 import org.mvel2.MVEL;
 import org.mvel2.PropertyAccessException;
-import org.slf4j.Logger;
 
 /**
  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
@@ -90,20 +99,18 @@ public class ShellImpl implements Shell
    private List<String> parameters;
 
    @Inject
-   private Logger log;
-
-   @Inject
    private ExecutionParser parser;
 
    @Inject
    private Event<PostStartup> postStartup;
 
    @Inject
-   private ProjectContext projectContext;
+   private CurrentProject projectContext;
 
    // TODO Resource API needs to be separated from Project API
    @Inject
    private ResourceFactory resourceFactory;
+   private Resource<?> lastResource;
 
    @Inject
    private PromptTypeConverter promptTypeConverter;
@@ -118,14 +125,66 @@ public class ShellImpl implements Shell
    private InputStream inputStream;
    private Writer outputWriter;
 
+   private final boolean colorEnabled = Boolean.getBoolean("seam.forge.shell.colorEnabled");
+
+   private final ConversionHandler resourceConversionHandler = new ConversionHandler()
+   {
+      @Override
+      @SuppressWarnings("rawtypes")
+      public Resource[] convertFrom(final Object obl)
+      {
+         return GeneralUtils.parseSystemPathspec(
+                  resourceFactory,
+                  lastResource,
+                  getCurrentResource(),
+                  obl instanceof String[] ? (String[]) obl : new String[] { obl.toString() });
+      }
+
+      @SuppressWarnings("rawtypes")
+      @Override
+      public boolean canConvertFrom(final Class aClass)
+      {
+         return true;
+      }
+   };
+
    void init(@Observes final Startup event, final PluginCommandCompleter pluginCompleter) throws Exception
    {
-      log.info("Seam Forge Shell - Starting up.");
-
       BooleanConverter booleanConverter = new BooleanConverter();
-      DataConversion.addConversionHandler(boolean.class, booleanConverter);
-      DataConversion.addConversionHandler(Boolean.class, booleanConverter);
-      DataConversion.addConversionHandler(File.class, new FileConverter());
+
+      addConversionHandler(boolean.class, booleanConverter);
+      addConversionHandler(Boolean.class, booleanConverter);
+      addConversionHandler(File.class, new FileConverter());
+
+      addConversionHandler(Resource[].class, resourceConversionHandler);
+      addConversionHandler(Resource.class, new ConversionHandler()
+
+      {
+         @Override
+         public Object convertFrom(final Object o)
+         {
+            Resource<?>[] res = (Resource<?>[]) resourceConversionHandler.convertFrom(o);
+            if (res.length > 1)
+            {
+               throw new RuntimeException("ambiguous paths");
+            }
+            else if (res.length == 0)
+            {
+               return ResourceUtil.parsePathspec(resourceFactory, getCurrentResource(), o.toString()).get(0);
+            }
+            else
+            {
+               return res[0];
+            }
+         }
+
+         @SuppressWarnings("rawtypes")
+         @Override
+         public boolean canConvertFrom(final Class aClass)
+         {
+            return resourceConversionHandler.canConvertFrom(aClass);
+         }
+      });
 
       initStreams();
       initCompleters(pluginCompleter);
@@ -139,7 +198,7 @@ public class ShellImpl implements Shell
    {
       List<Completer> completers = new ArrayList<Completer>();
       completers.add(new CommandCompleterAdaptor(pluginCompleter));
-      completers.add(new FileOptionCompleter(this));
+      // completers.add(new FileOptionCompleter());
 
       completer = new AggregateCompleter(completers);
       this.reader.addCompleter(completer);
@@ -173,7 +232,8 @@ public class ShellImpl implements Shell
 
       if ((parameters != null) && !parameters.isEmpty())
       {
-         // this is where we will initialize other parameters... e.g. accepting a path
+         // this is where we will initialize other parameters... e.g. accepting
+         // a path
       }
    }
 
@@ -181,8 +241,10 @@ public class ShellImpl implements Shell
    {
       System.out.println("   ____                          _____                    ");
       System.out.println("  / ___|  ___  __ _ _ __ ___    |  ___|__  _ __ __ _  ___ ");
-      System.out.println("  \\___ \\ / _ \\/ _` | '_ ` _ \\   | |_ / _ \\| '__/ _` |/ _ \\  \\\\");
-      System.out.println("   ___) |  __/ (_| | | | | | |  |  _| (_) | | | (_| |  __/  //");
+      System.out.println("  \\___ \\ / _ \\/ _` | '_ ` _ \\   | |_ / _ \\| '__/ _` |/ _ \\  "
+               + renderColor(ShellColor.YELLOW, "\\\\"));
+      System.out.println("   ___) |  __/ (_| | | | | | |  |  _| (_) | | | (_| |  __/  "
+               + renderColor(ShellColor.YELLOW, "//"));
       System.out.println("  |____/ \\___|\\__,_|_| |_| |_|  |_|  \\___/|_|  \\__, |\\___| ");
       System.out.println("                                                |___/      ");
       System.out.println("");
@@ -227,6 +289,7 @@ public class ShellImpl implements Shell
       try
       {
          execution = parser.parse(line);
+         execution.verifyConstraints(this);
          execution.perform();
       }
       catch (NoSuchCommandException e)
@@ -285,7 +348,6 @@ public class ShellImpl implements Shell
 
    private String execScript(final String script)
    {
-      String[] tokens = script.split("\\s");
 
       try
       {
@@ -297,7 +359,7 @@ public class ShellImpl implements Shell
       }
       catch (PropertyAccessException e)
       {
-         println(tokens[0] + ": command or property not found.");
+         println(firstToken(script) + ": command or property not found.");
 
          if (verbose)
          {
@@ -306,17 +368,17 @@ public class ShellImpl implements Shell
       }
       catch (Exception e)
       {
-         if (!validCommand.matcher(tokens[0]).matches())
+         if (!validCommand.matcher(firstToken(script)).matches())
          {
             println("error executing command:\n" + e.getMessage());
          }
-         else if (tokens.length == 1)
+         else if (firstWhitespace(script) != -1)
          {
-            println(tokens[0] + ": command or property not found.");
+            println(firstToken(script) + ": command or property not found.");
          }
          else
          {
-            println(tokens[0] + ": error executing statement: " + e.getMessage());
+            println(firstToken(script) + ": error executing statement: " + e.getMessage());
          }
 
          if (verbose)
@@ -369,6 +431,71 @@ public class ShellImpl implements Shell
    public void println()
    {
       System.out.println();
+   }
+
+   @Override
+   public void print(final ShellColor color, final String output)
+   {
+      print(renderColor(color, output));
+   }
+
+   @Override
+   public void println(final ShellColor color, final String output)
+   {
+      println(renderColor(color, output));
+   }
+
+   @Override
+   public void printlnVerbose(final ShellColor color, final String output)
+   {
+      printlnVerbose(renderColor(color, output));
+   }
+
+   @Override
+   public String renderColor(final ShellColor color, final String output)
+   {
+      if (!colorEnabled)
+      {
+         return output;
+      }
+
+      Ansi ansi = new Ansi();
+
+      switch (color)
+      {
+      case BLACK:
+         ansi.fg(Ansi.Color.BLACK);
+         break;
+      case BLUE:
+         ansi.fg(Ansi.Color.BLUE);
+         break;
+      case CYAN:
+         ansi.fg(Ansi.Color.CYAN);
+         break;
+      case GREEN:
+         ansi.fg(Ansi.Color.GREEN);
+         break;
+      case MAGENTA:
+         ansi.fg(Ansi.Color.MAGENTA);
+         break;
+      case RED:
+         ansi.fg(Ansi.Color.RED);
+         break;
+      case WHITE:
+         ansi.fg(Ansi.Color.WHITE);
+         break;
+      case YELLOW:
+         ansi.fg(Ansi.Color.YELLOW);
+         break;
+      case BOLD:
+         ansi.a(Ansi.Attribute.INTENSITY_BOLD);
+         break;
+
+      default:
+         ansi.fg(Ansi.Color.WHITE);
+      }
+
+      return ansi.render(output).reset().toString();
    }
 
    @Override
@@ -449,14 +576,20 @@ public class ShellImpl implements Shell
    @Override
    public String getPrompt()
    {
-      String suffix = "[no project]";
-      if (projectContext.getCurrentProject() != null)
+      String prefix = "[" + renderColor(ShellColor.RED, "no project") + "]";
+
+      if (projectContext.getCurrent() != null)
       {
-         // FIXME eventually, this cannot reference the MavenFacet directly.
-         suffix = "[" + projectContext.getCurrentProject().getFacet(MavenFacet.class).getPOM().getArtifactId() + "]";
+         Project currentProject = projectContext.getCurrent();
+         String projectName = currentProject.getFacet(MetadataFacet.class).getProjectName();
+         prefix = "[" + renderColor(ShellColor.GREEN, projectName) + "]";
       }
+
       String path = getCurrentResource().toString();
-      return suffix + " " + path + " $ ";
+      String prompt = prefix + " " + path +
+               renderColor(projectContext.getCurrent() == null ? ShellColor.RED : ShellColor.GREEN, " $ ");
+
+      return prompt;
    }
 
    @Override
@@ -496,8 +629,16 @@ public class ShellImpl implements Shell
    }
 
    @Override
+   @SuppressWarnings("unchecked")
+   public Class<? extends Resource<?>> getCurrentResourceScope()
+   {
+      return (Class<? extends Resource<?>>) getCurrentResource().getClass();
+   }
+
+   @Override
    public void setCurrentResource(final Resource<?> resource)
    {
+      lastResource = getCurrentResource();
       projectContext.setCurrentResource(resource);
    }
 
@@ -510,7 +651,7 @@ public class ShellImpl implements Shell
    @Override
    public Project getCurrentProject()
    {
-      return this.projectContext.getCurrentProject();
+      return this.projectContext.getCurrent();
    }
 
    /*
@@ -757,6 +898,11 @@ public class ShellImpl implements Shell
       return reader.getTerminal().getWidth();
    }
 
+   public String escapeCode(final int code, final String value)
+   {
+      return new Ansi().a(value).fg(Ansi.Color.BLUE).toString();
+   }
+
    @Override
    @SuppressWarnings("unchecked")
    public <T> T promptChoice(final String message, final Map<String, T> options)
@@ -807,7 +953,7 @@ public class ShellImpl implements Shell
       String path = "";
       while ((path == null) || path.trim().isEmpty())
       {
-         path = promptWithCompleter(message, new FileOptionCompleter(this));
+         path = promptWithCompleter(message, new FileOptionCompleter());
       }
 
       try
@@ -825,7 +971,7 @@ public class ShellImpl implements Shell
    public File promptFile(final String message, final File defaultIfEmpty)
    {
       File result = defaultIfEmpty;
-      String path = promptWithCompleter(message, new FileOptionCompleter(this));
+      String path = promptWithCompleter(message, new FileOptionCompleter());
       if (!"".equals(path) && (path != null) && !path.trim().isEmpty())
       {
          try

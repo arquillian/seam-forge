@@ -28,23 +28,22 @@ import java.util.List;
  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
  * 
  */
-public interface Method extends Abstractable<Method>, VisibilityScoped<Method>, AnnotationTarget<Method>
+public interface Method extends Abstractable<Method>, Member<Method>
 {
    public String getBody();
 
    public Method setBody(final String body);
 
    /**
-    * Toggle this method as a constructor. If true, and the name of the {@link Method} is not the same as the name of
-    * its parent {@link JavaClass} , update the name of the to match.
+    * Toggle this method as a constructor. If true, and the name of the
+    * {@link Method} is not the same as the name of its parent {@link JavaClass}
+    * , update the name of the to match.
     */
    public Method setConstructor(final boolean constructor);
 
    public boolean isConstructor();
 
    public Method setFinal();
-
-   public String getName();
 
    public Method setName(final String name);
 

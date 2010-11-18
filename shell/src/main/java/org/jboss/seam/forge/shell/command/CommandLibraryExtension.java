@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,11 +19,13 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.command;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,22 +36,25 @@ import javax.enterprise.inject.spi.Extension;
 import javax.enterprise.inject.spi.ProcessBean;
 import javax.inject.Named;
 
+import org.jboss.seam.forge.project.Resource;
+import org.jboss.seam.forge.project.util.Annotations;
 import org.jboss.seam.forge.shell.plugins.Command;
 import org.jboss.seam.forge.shell.plugins.DefaultCommand;
 import org.jboss.seam.forge.shell.plugins.Help;
 import org.jboss.seam.forge.shell.plugins.Option;
+import org.jboss.seam.forge.shell.plugins.OverloadedName;
 import org.jboss.seam.forge.shell.plugins.Plugin;
-import org.jboss.seam.forge.shell.util.Annotations;
+import org.jboss.seam.forge.shell.plugins.ResourceScope;
+import org.jboss.seam.forge.shell.plugins.Topic;
 
 /**
  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
- * 
  */
 public class CommandLibraryExtension implements Extension
 {
-   private final Map<String, PluginMetadata> plugins = new HashMap<String, PluginMetadata>();
+   private final Map<String, List<PluginMetadata>> plugins = new HashMap<String, List<PluginMetadata>>();
 
-   public Map<String, PluginMetadata> getPlugins()
+   public Map<String, List<PluginMetadata>> getPlugins()
    {
       return plugins;
    }
@@ -64,7 +69,13 @@ public class CommandLibraryExtension implements Extension
       if (Plugin.class.isAssignableFrom(clazz))
       {
          PluginMetadata pluginMeta = getMetadataFor((Class<? extends Plugin>) clazz);
-         plugins.put(pluginMeta.getName(), pluginMeta);
+
+         if (!plugins.containsKey(pluginMeta.getName()))
+         {
+            plugins.put(pluginMeta.getName(), new ArrayList<PluginMetadata>());
+         }
+
+         plugins.get(pluginMeta.getName()).add(pluginMeta);
       }
    }
 
@@ -85,6 +96,19 @@ public class CommandLibraryExtension implements Extension
          pluginMeta.setHelp("");
       }
 
+      if (Annotations.isAnnotationPresent(plugin, ResourceScope.class))
+      {
+         List<Class<? extends Resource<?>>> resourceTypes = Arrays.asList(Annotations.getAnnotation(plugin,
+                  ResourceScope.class).value());
+
+         pluginMeta.setResourceScopes(resourceTypes);
+      }
+
+      if (Annotations.isAnnotationPresent(plugin, Topic.class))
+      {
+         pluginMeta.setTopic(Annotations.getAnnotation(plugin, Topic.class).value());
+      }
+
       processPluginCommands(pluginMeta, plugin);
 
       return pluginMeta;
@@ -93,7 +117,6 @@ public class CommandLibraryExtension implements Extension
    private List<CommandMetadata> processPluginCommands(final PluginMetadata pluginMeta, final Class<?> plugin)
    {
       List<CommandMetadata> results = new ArrayList<CommandMetadata>();
-      pluginMeta.setCommands(results);
 
       for (Method method : plugin.getMethods())
       {
@@ -137,6 +160,16 @@ public class CommandLibraryExtension implements Extension
                }
             }
 
+            if (Annotations.isAnnotationPresent(method, ResourceScope.class))
+            {
+               List<Class<? extends Resource>> resourceTypes = new ArrayList<Class<? extends Resource>>(
+                        pluginMeta.getResourceScopes());
+
+               resourceTypes.addAll(Arrays.asList(Annotations.getAnnotation(method, ResourceScope.class).value()));
+
+               commandMeta.setResourceScopes(resourceTypes);
+            }
+
             // fall back to the pluginMetadata for help text
             if ((commandMeta.getHelp() == null) || commandMeta.getHelp().trim().isEmpty())
             {
@@ -168,6 +201,7 @@ public class CommandLibraryExtension implements Extension
                      optionMeta.setRequired(option.required());
                      optionMeta.setPromptType(option.type());
                   }
+
                }
                commandMeta.addOption(optionMeta);
                i++;
@@ -176,20 +210,39 @@ public class CommandLibraryExtension implements Extension
             results.add(commandMeta);
          }
       }
+
+      pluginMeta.addCommands(results);
+
       return results;
    }
 
    private String getPluginName(final Class<?> plugin)
    {
       String name = null;
-      Named named = Annotations.getAnnotation(plugin, Named.class);
-      if (named != null)
+
+      if (Annotations.isAnnotationPresent(plugin, OverloadedName.class))
       {
-         name = named.value();
+         OverloadedName named = Annotations.getAnnotation(plugin, OverloadedName.class);
+         if (named != null)
+         {
+            name = named.value();
+         }
+         if ((name == null) || "".equals(name.trim()))
+         {
+            name = plugin.getSimpleName();
+         }
       }
-      if ((name == null) || "".equals(name.trim()))
+      else
       {
-         name = plugin.getSimpleName();
+         Named named = Annotations.getAnnotation(plugin, Named.class);
+         if (named != null)
+         {
+            name = named.value();
+         }
+         if ((name == null) || "".equals(name.trim()))
+         {
+            name = plugin.getSimpleName();
+         }
       }
       return name.toLowerCase();
    }

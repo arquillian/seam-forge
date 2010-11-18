@@ -30,4 +30,6 @@ import org.jboss.seam.forge.parser.Origin;
  */
 public interface Parameter extends Internal, Origin<JavaClass>
 {
+   // TODO this needs to be filled out (Type, Annotations, Initializer, Etc.)
+   String getName();
 }

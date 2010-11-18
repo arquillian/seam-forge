@@ -1,3 +1,25 @@
+/*
+ * JBoss, by Red Hat.
+ * Copyright 2010, Red Hat, Inc., and individual contributors
+ * by the @authors tag. See the copyright.txt in the distribution for a
+ * full listing of individual contributors.
+ *
+ * This is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation; either version 2.1 of
+ * the License, or (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this software; if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
+ * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ */
+
 package org.jboss.seam.forge.project.services;
 
 import java.io.File;
@@ -24,7 +46,7 @@ import org.jboss.seam.forge.project.resources.builtin.UnknownFileResource;
 @Singleton
 public class ResourceFactory implements Extension
 {
-   private final List<ResourceGenerator> resourceGenerators = new ArrayList<ResourceGenerator>();;
+   private final List<ResourceGenerator> resourceGenerators = new ArrayList<ResourceGenerator>();
    /**
     * Most directories will tend to contain the same type of file (such as .java, .jar, .xml, etc). So we will remember
     * the last resource type we tested against and always re-try on subsequent queries before doing a comprehensive

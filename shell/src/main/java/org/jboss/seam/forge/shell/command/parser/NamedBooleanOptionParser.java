@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,6 +19,7 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.command.parser;
 
 import java.util.HashMap;
@@ -30,11 +31,11 @@ import org.jboss.seam.forge.shell.command.OptionMetadata;
 
 /**
  * Parses named boolean options such as:
- * <p>
+ * <p/>
  * <code>[command] {--toggle}</code>
  * 
  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
- * 
+ * @author Mike Brock
  */
 public class NamedBooleanOptionParser implements CommandParser
 {
@@ -46,32 +47,57 @@ public class NamedBooleanOptionParser implements CommandParser
       String currentToken = tokens.peek();
       if (currentToken.matches("--?\\S+"))
       {
-         boolean shortOption = currentToken.matches("-[^-]\\S+");
-         currentToken = currentToken.substring(shortOption ? 1 : 2);
-
-         if (shortOption ? command.hasShortOption(currentToken) : command.hasOption(currentToken))
+         if ((currentToken.length() > 1) && (currentToken.charAt(1) != '-'))
          {
-            OptionMetadata option = command.getNamedOption(currentToken);
-
-            if (option.isBoolean())
+            for (int i = 1; i < currentToken.length(); i++)
             {
-               tokens.remove();
-               String value = "true";
-               if (!option.isFlagOnly() && !tokens.isEmpty())
-               {
-                  String nextToken = tokens.peek();
-                  if (nextToken.matches("true|false"))
-                  {
-                     value = nextToken;
-                     tokens.remove(); // increment the chain of tokens
-                  }
-               }
+               String shortOption = currentToken.substring(i, i + 1);
 
-               valueMap.put(option, value);
+               if (command.hasShortOption(shortOption))
+               {
+                  processOption(valueMap, tokens, command, shortOption);
+               }
+               else
+               {
+                  throw new RuntimeException("unknown option: " + shortOption);
+               }
+            }
+
+            tokens.remove(); // increment the chain of tokens
+         }
+         else
+         {
+            currentToken = currentToken.substring(2);
+
+            if (command.hasOption(currentToken))
+            {
+               processOption(valueMap, tokens, command, currentToken);
             }
          }
       }
       return valueMap;
    }
 
+   private static void processOption(final Map<OptionMetadata, Object> valueMap, final Queue<String> tokens,
+                                           final CommandMetadata command, final String currentToken)
+   {
+      OptionMetadata option = command.getNamedOption(currentToken);
+
+      if (option.isBoolean())
+      {
+         String value = "true";
+         if (!option.isFlagOnly() && !tokens.isEmpty())
+         {
+            tokens.remove();
+            String nextToken = tokens.peek();
+            if (nextToken.matches("true|false"))
+            {
+               value = nextToken;
+               tokens.remove();
+            }
+         }
+
+         valueMap.put(option, value);
+      }
+   }
 }

@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,9 +19,9 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.plugins.builtin;
 
-import java.io.File;
 import java.io.IOException;
 
 import javax.enterprise.event.Event;
@@ -30,20 +30,23 @@ import javax.inject.Named;
 import javax.inject.Singleton;
 
 import org.jboss.seam.forge.project.Resource;
+import org.jboss.seam.forge.project.resources.FileResource;
 import org.jboss.seam.forge.project.resources.builtin.DirectoryResource;
 import org.jboss.seam.forge.project.services.ResourceFactory;
-import org.jboss.seam.forge.project.util.ResourceUtil;
 import org.jboss.seam.forge.shell.Shell;
 import org.jboss.seam.forge.shell.plugins.DefaultCommand;
 import org.jboss.seam.forge.shell.plugins.Help;
 import org.jboss.seam.forge.shell.plugins.Option;
 import org.jboss.seam.forge.shell.plugins.Plugin;
+import org.jboss.seam.forge.shell.plugins.Topic;
 import org.jboss.seam.forge.shell.plugins.events.InitProject;
 
 /**
  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
+ * @author Mike Brock
  */
 @Named("cd")
+@Topic("File & Resources")
 @Help("Change the current directory")
 @Singleton
 public class ChangeDirectoryPlugin implements Plugin
@@ -62,37 +65,33 @@ public class ChangeDirectoryPlugin implements Plugin
    }
 
    @DefaultCommand
-   public void run(@Option(description = "The new directory") final String path) throws IOException
+   public void run(@Option(description = "The new directory", defaultValue = "~") final Resource<?>[] dirs)
+            throws IOException
    {
       Resource<?> curr = shell.getCurrentResource();
-      Resource<?> r;
+      Resource<?> r = null;
 
-      if ("-".equals(path))
+      for (Resource<?> dir : dirs)
       {
-         r = this.lastResource;
-      }
-      else if (path == null)
-      {
-         r = new DirectoryResource(resFactory, new File(System.getProperty("user.home")));
-      }
-      else
-      {
-         r = ResourceUtil.parsePathspec(resFactory, curr, path);
-         if (r instanceof DirectoryResource)
+         if (!(dir instanceof DirectoryResource))
          {
-            r = resFactory.getResourceFrom(((DirectoryResource) r).getUnderlyingResourceObject());
+            // throw new RuntimeException(dir + " is not a directory");
          }
+         r = dir;
       }
 
       if (r != null)
       {
+         if (!((FileResource) r).exists())
+         {
+            throw new RuntimeException("no such resource: " + r.toString());
+         }
+
          shell.setCurrentResource(r);
          if (curr != null)
          {
             this.lastResource = curr;
          }
-
-         init.fire(new InitProject());
       }
    }
 }

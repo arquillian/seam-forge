@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,6 +19,7 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.plugins.builtin;
 
 import java.io.File;
@@ -28,10 +29,12 @@ import javax.inject.Inject;
 import javax.inject.Named;
 
 import org.apache.maven.model.Model;
+import org.apache.maven.model.Repository;
 import org.jboss.seam.forge.parser.JavaParser;
 import org.jboss.seam.forge.project.Project;
 import org.jboss.seam.forge.project.facets.JavaSourceFacet;
-import org.jboss.seam.forge.project.facets.MavenFacet;
+import org.jboss.seam.forge.project.facets.MavenCoreFacet;
+import org.jboss.seam.forge.project.facets.MetadataFacet;
 import org.jboss.seam.forge.project.facets.ResourceFacet;
 import org.jboss.seam.forge.project.services.ProjectFactory;
 import org.jboss.seam.forge.shell.PromptType;
@@ -40,13 +43,14 @@ import org.jboss.seam.forge.shell.plugins.DefaultCommand;
 import org.jboss.seam.forge.shell.plugins.Help;
 import org.jboss.seam.forge.shell.plugins.Option;
 import org.jboss.seam.forge.shell.plugins.Plugin;
-import org.jboss.seam.forge.shell.project.ProjectContext;
+import org.jboss.seam.forge.shell.plugins.Topic;
 import org.jboss.seam.forge.shell.util.Files;
 
 /**
  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
  */
 @Named("new-project")
+@Topic("Project")
 @Help("Create a new project in an empty directory.")
 public class NewProjectPlugin implements Plugin
 {
@@ -54,35 +58,34 @@ public class NewProjectPlugin implements Plugin
    private Shell shell;
 
    @Inject
-   private ProjectContext cp;
-
-   @Inject
    private ProjectFactory projectFactory;
 
+   @SuppressWarnings("unchecked")
    @DefaultCommand
    public void create(
-         @Option(name = "named",
-               description = "The name of the new project",
-               required = true) final String name,
-         @Option(name = "topLevelPackage",
-               description = "The top level package for your Java source files [e.g: \"com.example.project\"] ",
-               required = true,
-               type = PromptType.JAVA_PACKAGE) String groupId,
-         @Option(name = "projectFolder",
-               description = "The folder in which to create this project [e.g: \"~/Desktop/...\"] ",
-               required = false) File projectFolder
-   ) throws IOException
+            @Option(name = "named",
+                     description = "The name of the new project",
+                     required = true) final String name,
+            @Option(name = "topLevelPackage",
+                     description = "The top level package for your Java source files [e.g: \"com.example.project\"] ",
+                     required = true,
+                     type = PromptType.JAVA_PACKAGE) final String groupId,
+            @Option(name = "projectFolder",
+                     description = "The folder in which to create this project [e.g: \"~/Desktop/...\"] ",
+                     required = false) final File projectFolder
+            ) throws IOException
    {
       File cwd = shell.getCurrentDirectory();
 
       File dir = new File(cwd.getAbsolutePath() + File.separator + name);
-      if (projectFactory.containsProject(dir) || !shell.promptBoolean("Use [" + dir.getAbsolutePath() + "] as project directory?"))
+      if (projectFactory.containsProject(dir)
+               || !shell.promptBoolean("Use [" + dir.getAbsolutePath() + "] as project directory?"))
       {
          if (projectFactory.containsProject(dir))
          {
-            shell.println("***ERROR*** [" + dir.getAbsolutePath() + "] already contains a project; please use a different folder.");
+            shell.println("***ERROR*** [" + dir.getAbsolutePath()
+                     + "] already contains a project; please use a different folder.");
          }
-
 
          File defaultDir;
 
@@ -109,8 +112,9 @@ public class NewProjectPlugin implements Plugin
             shell.println();
             if (!projectFactory.containsProject(cwd))
             {
-               newDir = shell.promptFile("Where would you like to create the project? [Press ENTER to use the current directory: " + cwd + "]", defaultDir)
-               ;
+               newDir = shell.promptFile(
+                        "Where would you like to create the project? [Press ENTER to use the current directory: " + cwd
+                                 + "]", defaultDir);
             }
             else
             {
@@ -131,30 +135,36 @@ public class NewProjectPlugin implements Plugin
          dir.mkdirs();
       }
 
-      Project project = projectFactory.createProject(dir, MavenFacet.class, JavaSourceFacet.class, ResourceFacet.class);
-      Model pom = project.getFacet(MavenFacet.class).getPOM();
+      Project project = projectFactory.createProject(dir, MavenCoreFacet.class, MetadataFacet.class,
+               JavaSourceFacet.class, ResourceFacet.class);
+      MavenCoreFacet maven = project.getFacet(MavenCoreFacet.class);
+      Model pom = maven.getPOM();
       pom.setArtifactId(name);
       pom.setGroupId(groupId);
       pom.setPackaging("jar");
 
-      project.getFacet(MavenFacet.class).setPOM(pom);
+      Repository jbossRepo = new Repository();
+      jbossRepo.setId("jboss");
+      jbossRepo.setUrl("https://repository.jboss.org/nexus/content/groups/public/");
+      pom.getRepositories().add(jbossRepo);
+
+      maven.setPOM(pom);
 
       project.getFacet(JavaSourceFacet.class).saveJavaClass(JavaParser
-            .createClass()
-            .setPackage(groupId)
-            .setName("HelloWorld")
-            .addMethod("public void String sayHello() {}")
-            .setBody("System.out.println(\"Hi there! I was created as part of the project you call " + name
-                  + ".\");")
-            .getOrigin());
+               .createClass()
+               .setPackage(groupId)
+               .setName("HelloWorld")
+               .addMethod("public void String sayHello() {}")
+               .setBody("System.out.println(\"Hi there! I was forged as part of the project you call " + name
+                        + ".\");")
+               .getOrigin());
 
       project.getFacet(ResourceFacet.class).createResource("<forge/>".toCharArray(), "META-INF/forge.xml");
 
       /*
        * Only change the environment after success!
        */
-      cp.setCurrentProject(project);
-
+      shell.setCurrentResource(project.getProjectRoot());
       shell.println("***SUCCESS*** Created project [" + name + "] in new working directory [" + dir + "]");
    }
 }

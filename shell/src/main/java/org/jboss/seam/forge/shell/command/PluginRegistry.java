@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,9 +19,15 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.command;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.PostConstruct;
 import javax.enterprise.context.spi.CreationalContext;
@@ -30,18 +36,24 @@ import javax.enterprise.inject.spi.BeanManager;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+import org.jboss.seam.forge.project.Facet;
+import org.jboss.seam.forge.project.PackagingType;
+import org.jboss.seam.forge.project.Resource;
+import org.jboss.seam.forge.shell.Shell;
 import org.jboss.seam.forge.shell.plugins.Plugin;
+import org.jboss.seam.forge.shell.plugins.ResourceScope;
 
 /**
  * Stores the current registry of all installed & loaded plugins.
  * 
  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
- * 
  */
 @Singleton
 public class PluginRegistry
 {
-   private Map<String, PluginMetadata> plugins;
+   private Map<String, List<PluginMetadata>> plugins;
+   private Map<String, Map<Class, PluginMetadata>> accessCache;
+
    private final CommandLibraryExtension library;
    private final BeanManager manager;
 
@@ -56,16 +68,23 @@ public class PluginRegistry
    public void init()
    {
       plugins = library.getPlugins();
+      accessCache = new HashMap<String, Map<Class, PluginMetadata>>();
+      sanityCheck();
    }
 
-   public Map<String, PluginMetadata> getPlugins()
+   public Map<String, List<PluginMetadata>> getPlugins()
    {
       return plugins;
    }
 
    public void addPlugin(final PluginMetadata plugin)
    {
-      plugins.put(plugin.getName(), plugin);
+      if (!plugins.containsKey(plugin.getName()))
+      {
+         plugins.put(plugin.getName(), new ArrayList<PluginMetadata>());
+      }
+
+      plugins.get(plugin.getName()).add(plugin);
    }
 
    @Override
@@ -100,9 +119,67 @@ public class PluginRegistry
     * 
     * @return the metadata, or null if no plugin with given name exists.
     */
-   public PluginMetadata getPluginMetadata(final String plugin)
+   public List<PluginMetadata> getPluginMetadata(final String plugin)
    {
-      return plugins.get(plugin);
+      return Collections.unmodifiableList(plugins.get(plugin));
+   }
+
+   /**
+    * Get {@link PluginMetadata} matching the given name, {@link ResourceScope}, {@link Project}, {@link PackagingType},
+    * and {@link Facet} constraints. Return null if no match for the given constraints can be found.
+    */
+   public PluginMetadata getPluginMetadataForScopeAndConstraints(final String name, final Shell shell)
+   {
+      Class<? extends Resource<?>> scope = shell.getCurrentResourceScope();
+      if (accessCache.containsKey(name) && accessCache.get(name).containsKey(scope))
+      {
+         return accessCache.get(name).get(scope);
+      }
+
+      List<PluginMetadata> pluginMetadataList = plugins.get(name);
+      if (pluginMetadataList == null)
+      {
+         return null;
+      }
+
+      PluginMetadata pmd = null;
+      for (PluginMetadata p : pluginMetadataList)
+      {
+         if (p.constrantsSatisfied(shell))
+         {
+            pmd = p;
+            break;
+         }
+      }
+
+      return pmd;
+   }
+
+   private void sanityCheck()
+   {
+      for (Map.Entry<String, List<PluginMetadata>> entry : plugins.entrySet())
+      {
+         Set<Class<? extends Resource<?>>> scopes = null;
+
+         for (PluginMetadata metaData : entry.getValue())
+         {
+            if (scopes == null)
+            {
+               scopes = metaData.getResourceScopes();
+            }
+            else
+            {
+               for (Class<? extends Resource<?>> r : metaData.getResourceScopes())
+               {
+                  if (scopes.contains(r))
+                  {
+                     throw new RuntimeException("failed sanity check. overlapping scopes for overloaded plugin name: "
+                              + entry.getKey() + " [" + entry.getValue() + "]");
+                  }
+               }
+            }
+         }
+      }
    }
 
 }

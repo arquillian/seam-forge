@@ -1,6 +1,7 @@
 package org.jboss.seam.forge.test.project.resources;
 
 import java.io.File;
+import java.util.List;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -11,6 +12,7 @@ import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.seam.forge.project.Resource;
 import org.jboss.seam.forge.project.resources.builtin.DirectoryResource;
 import org.jboss.seam.forge.project.services.ResourceFactory;
+import org.jboss.seam.forge.project.util.PathspecParser;
 import org.jboss.seam.forge.project.util.ResourceUtil;
 import org.jboss.seam.forge.test.project.util.ProjectModelTest;
 import org.junit.Test;
@@ -30,7 +32,7 @@ public class ResourceAPITests extends ProjectModelTest
                .getParentFile());
       DirectoryResource r = new DirectoryResource(factory, new File("").getAbsoluteFile());
 
-      Assert.assertEquals(expect, ResourceUtil.parsePathspec(factory, r, "../.."));
+      Assert.assertEquals(expect, ResourceUtil.parsePathspec(factory, r, "../..").iterator().next());
    }
 
    @Test
@@ -39,8 +41,32 @@ public class ResourceAPITests extends ProjectModelTest
       DirectoryResource expect = new DirectoryResource(factory, new File("/"));
       DirectoryResource root = new DirectoryResource(factory, new File("").getAbsoluteFile());
 
-      Resource r = ResourceUtil.parsePathspec(factory, root, "/");
+      List<Resource<?>> r = ResourceUtil.parsePathspec(factory, root, "/");
 
-      Assert.assertEquals(expect, r);
+      Assert.assertEquals(expect, r.iterator().next());
    }
+
+   @Test
+   public void testWildCards()
+   {
+
+      DirectoryResource r = new DirectoryResource(factory, new File("").getAbsoluteFile());
+
+      for (Resource<?> res : ResourceUtil.parsePathspec(factory, r, "*"))
+      {
+         System.out.println(res);
+      }
+   }
+
+   @Test
+   public void testDeepSearch() {
+      DirectoryResource root = new DirectoryResource(factory, new File("").getAbsoluteFile());
+      List<Resource<?>> results =  new PathspecParser(factory, root,"BaseEvent.java").search();
+
+      for (Resource<?> r : results)
+      {
+         System.out.println(r);
+      }
+   }
+
 }

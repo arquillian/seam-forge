@@ -29,11 +29,12 @@ import javax.inject.Inject;
 
 import org.jboss.arquillian.api.Deployment;
 import org.jboss.seam.forge.project.Project;
+import org.jboss.seam.forge.project.facets.DependencyFacet;
 import org.jboss.seam.forge.project.facets.JavaSourceFacet;
-import org.jboss.seam.forge.project.facets.MavenFacet;
+import org.jboss.seam.forge.project.facets.MavenCoreFacet;
+import org.jboss.seam.forge.project.facets.PackagingFacet;
 import org.jboss.seam.forge.project.facets.ResourceFacet;
 import org.jboss.seam.forge.project.facets.WebResourceFacet;
-import org.jboss.seam.forge.project.services.FacetFactory;
 import org.jboss.seam.forge.project.services.ProjectFactory;
 import org.jboss.seam.forge.test.project.MavenFacetsTest;
 import org.jboss.shrinkwrap.api.ArchivePaths;
@@ -54,11 +55,8 @@ public abstract class ProjectModelTest
    {
       return ShrinkWrap.create(JavaArchive.class, "test.jar")
                .addPackages(true, Project.class.getPackage())
-               .addClass(FacetFactory.class)
                .addManifestResource(new ByteArrayAsset("<beans/>".getBytes()), ArchivePaths.create("beans.xml"))
-               .addManifestResource("META-INF/services/javax.enterprise.inject.spi.Extension")
-               .addManifestResource("META-INF/services/org.jboss.seam.forge.project.Facet")
-               .addManifestResource("META-INF/services/org.jboss.seam.forge.project.services.ProjectLocator");
+               .addManifestResource("META-INF/services/javax.enterprise.inject.spi.Extension");
    }
 
    private static final String PKG = MavenFacetsTest.class.getSimpleName().toLowerCase();
@@ -67,26 +65,26 @@ public abstract class ProjectModelTest
    @Inject
    private ProjectFactory projectFactory;
 
-   private static Project tempProject;
+   private static Project project;
 
    @Before
    @SuppressWarnings("unchecked")
    public void postConstruct() throws IOException
    {
-      if (tempProject == null)
+      if (project == null)
       {
          tempFolder = File.createTempFile(PKG, null);
          tempFolder.delete();
          tempFolder.mkdirs();
 
-         tempProject = projectFactory.createProject(tempFolder, MavenFacet.class, JavaSourceFacet.class,
-                  ResourceFacet.class, WebResourceFacet.class);
+         project = projectFactory.createProject(tempFolder, MavenCoreFacet.class, JavaSourceFacet.class,
+                  ResourceFacet.class, WebResourceFacet.class, DependencyFacet.class, PackagingFacet.class);
       }
    }
 
    protected Project getProject()
    {
-      return tempProject;
+      return project;
    }
 
 }

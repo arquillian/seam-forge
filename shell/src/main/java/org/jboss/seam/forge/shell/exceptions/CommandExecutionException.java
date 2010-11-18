@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -41,7 +41,7 @@ public class CommandExecutionException extends ShellExecutionException
 
    public CommandExecutionException(final CommandMetadata command, final Throwable e)
    {
-      super(e);
+      super(e.getCause() != null ? e.getCause().getMessage() : e.getMessage(), e);
       this.command = command;
    }
 
@@ -55,5 +55,4 @@ public class CommandExecutionException extends ShellExecutionException
    {
       return command;
    }
-
 }

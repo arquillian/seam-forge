@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -26,11 +26,16 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.jboss.seam.forge.project.Facet;
 import org.jboss.seam.forge.project.Project;
 import org.jboss.seam.forge.project.ProjectModelException;
+import org.jboss.seam.forge.project.constraints.ConstraintInspector;
 import org.jboss.seam.forge.project.facets.FacetNotFoundException;
 
 /**
@@ -39,7 +44,26 @@ import org.jboss.seam.forge.project.facets.FacetNotFoundException;
  */
 public abstract class AbstractProject implements Project
 {
-   private final List<Facet> facets = new ArrayList<Facet>();
+   private final Set<Facet> facets = new HashSet<Facet>();
+   private final Map<String, Object> attributes = new HashMap<String, Object>();
+
+   @Override
+   public Object getAttribute(final String key)
+   {
+      return attributes.get(key);
+   }
+
+   @Override
+   public void setAttribute(final String key, final Object value)
+   {
+      attributes.put(key, value);
+   }
+
+   @Override
+   public void removeAttribute(final String key)
+   {
+      attributes.remove(key);
+   }
 
    @Override
    public boolean delete(final File file)
@@ -152,6 +176,19 @@ public abstract class AbstractProject implements Project
    }
 
    @Override
+   public boolean hasAllFacets(final List<Class<? extends Facet>> facetDependencies)
+   {
+      for (Class<? extends Facet> type : facetDependencies)
+      {
+         if (!hasFacet(type))
+         {
+            return false;
+         }
+      }
+      return true;
+   }
+
+   @Override
    @SuppressWarnings("unchecked")
    public <F extends Facet> F getFacet(final Class<F> type)
    {
@@ -175,7 +212,9 @@ public abstract class AbstractProject implements Project
    @Override
    public List<Facet> getFacets()
    {
-      return facets;
+      List<Facet> result = new ArrayList<Facet>();
+      result.addAll(facets);
+      return result;
    }
 
    @Override
@@ -203,19 +242,17 @@ public abstract class AbstractProject implements Project
          throw new IllegalArgumentException("Attempted to register 'null' as a Facet; Facets cannot be null.");
       }
 
-      if (facet.getDependencies() != null)
+      List<Class<? extends Facet>> dependencies = ConstraintInspector.getFacetDependencies(facet.getClass());
+      for (Class<? extends Facet> type : dependencies)
       {
-         for (Class<? extends Facet> type : facet.getDependencies())
+         if (!hasFacet(type))
          {
-            if (!hasFacet(type))
-            {
-               throw new IllegalStateException("Attempting to register a Facet that has missing dependencies: ["
+            throw new IllegalStateException("Attempting to register a Facet that has missing dependencies: ["
                         + facet.getClass().getSimpleName() + " requires -> " + type.getSimpleName() + "]");
-            }
          }
       }
 
-      facet.init(this);
+      facet.setProject(this);
       if (facet.isInstalled() && !hasFacet(facet.getClass()))
       {
          facets.add(facet);
@@ -226,7 +263,7 @@ public abstract class AbstractProject implements Project
    @Override
    public Project installFacet(final Facet facet)
    {
-      facet.init(this);
+      facet.setProject(this);
       if (!facet.isInstalled() && !hasFacet(facet.getClass()))
       {
          facet.install();

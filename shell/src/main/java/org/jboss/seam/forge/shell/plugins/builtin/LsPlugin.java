@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,95 +19,228 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.plugins.builtin;
 
-import java.util.LinkedList;
-import java.util.List;
+import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 import javax.inject.Inject;
 import javax.inject.Named;
 
+import org.eclipse.core.internal.utils.Cache;
+import org.eclipse.core.runtime.Path;
 import org.jboss.seam.forge.project.Resource;
+import org.jboss.seam.forge.project.ResourceFlag;
+import org.jboss.seam.forge.project.resources.FileResource;
+import org.jboss.seam.forge.project.resources.builtin.DirectoryResource;
+import org.jboss.seam.forge.project.services.ResourceFactory;
+import org.jboss.seam.forge.project.util.ResourceUtil;
 import org.jboss.seam.forge.shell.Shell;
-import org.jboss.seam.forge.shell.plugins.DefaultCommand;
-import org.jboss.seam.forge.shell.plugins.Help;
-import org.jboss.seam.forge.shell.plugins.Option;
-import org.jboss.seam.forge.shell.plugins.Plugin;
+import org.jboss.seam.forge.shell.plugins.*;
+import org.jboss.seam.forge.shell.util.FormatCallback;
+import org.jboss.seam.forge.shell.util.GeneralUtils;
+import org.jboss.seam.forge.shell.util.ShellColor;
+import org.mvel2.util.StringAppender;
+
+import static org.jboss.seam.forge.project.util.ResourceUtil.parsePathspec;
+import static org.jboss.seam.forge.shell.util.GeneralUtils.printOutColumns;
+import static org.jboss.seam.forge.shell.util.GeneralUtils.printOutTables;
 
 /**
  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
  * @author Mike Brock
  */
 @Named("ls")
+@Topic("File & Resources")
+@ResourceScope(DirectoryResource.class)
 @Help("Prints the contents current directory.")
 public class LsPlugin implements Plugin
 {
    private final Shell shell;
+   private final ResourceFactory factory;
+
+   private static final long yearMarker;
+   private static final SimpleDateFormat dateFormatOld = new SimpleDateFormat("MMM d yyyy");
+   private static final SimpleDateFormat dateFormatRecent = new SimpleDateFormat("MMM d HH:mm");
+
+   static
+   {
+      Calendar c = Calendar.getInstance();
+      c.setTimeInMillis(System.currentTimeMillis());
+      c.set(Calendar.MONTH, 0);
+      c.set(Calendar.DAY_OF_MONTH, 0);
+      c.set(Calendar.HOUR, 0);
+      c.set(Calendar.MINUTE, 0);
+      c.set(Calendar.SECOND, 0);
+      c.set(Calendar.MILLISECOND, 0);
+
+      yearMarker = c.getTimeInMillis();
+   }
 
    @Inject
-   public LsPlugin(final Shell shell)
+   public LsPlugin(final Shell shell, final ResourceFactory factory)
    {
       this.shell = shell;
+      this.factory = factory;
    }
 
    @DefaultCommand
-   public void run(@Option(flagOnly = true, name = "all", shortName = "a", required = false) final boolean showAll)
+   public void run(@Option(flagOnly = true, name = "all", shortName = "a", required = false) final boolean showAll,
+                   @Option(flagOnly = true, name = "list", shortName = "l", required = false) final boolean list,
+                   @Option(description = "path", defaultValue = ".") Resource<?>[] paths)
    {
-      Resource<?> resource = shell.getCurrentResource();
 
-      int width = shell.getWidth();
+      Map<String, List<String>> sortMap = new TreeMap<String, List<String>>();
+      List<String> listBuild = new LinkedList<String>();
 
-      List<Resource<?>> childResources = resource.listResources();
-      List<String> listData = new LinkedList<String>();
-
-      int maxLength = 0;
-
-      String el;
-      for (Resource<?> r : childResources)
+      for (Resource<?> resource : paths)
       {
-         el = r.toString();
+         List<Resource<?>> childResources;
 
-         if (showAll || !el.startsWith("."))
+         /**
+          * Check to see if the way this resource was resolved was by a wildcard, in which case we don't
+          * expand into it's children. Otherwise, if it's fully qualified we recurse into that directory
+          * and list all those files.
+          */
+         if (!resource.isFlagSet(ResourceFlag.AmbiguouslyQualified))
          {
-            listData.add(el);
-            if (el.length() > maxLength)
+            childResources = resource.listResources();
+         }
+         else
+         {
+            childResources = Collections.<Resource<?>>singletonList(resource);
+         }
+
+         String el;
+         File file;
+
+         if (list)
+         {
+            /**
+             * List-view implementation.
+             */
+            int fileCount = 0;
+            boolean dir;
+            List<String> subList;
+            for (Resource<?> r : childResources)
             {
-               maxLength = el.length();
+               sortMap.put(el = r.getName(), subList = new ArrayList<String>());
+               file = (File) r.getUnderlyingResourceObject();
+
+               if (dir = (r instanceof DirectoryResource))
+               {
+                  el += "/";
+               }
+
+               if (showAll || !el.startsWith("."))
+               {
+                  StringBuilder permissions = new StringBuilder(dir ? "d" : "-")
+                        .append(file.canRead() ? 'r' : '-')
+                        .append(file.canWrite() ? 'w' : '-')
+                        .append(file.canExecute() ? 'x' : '-')
+                        .append("------");
+
+                  subList.add(permissions.toString());
+                  subList.add("owner"); // not supported
+                  subList.add(" users "); // not supported
+                  subList.add(String.valueOf(file.length()));
+                  subList.addAll(Arrays.asList(getDateString(file.lastModified())));
+                  subList.add(el);
+
+                  if (!dir)
+                  {
+                     fileCount++;
+                  }
+               }
+            }
+
+            for (List<String> sublist : sortMap.values())
+            {
+               listBuild.addAll(sublist);
+            }
+
+            shell.println("total " + fileCount);
+         }
+         else
+         {
+            for (Resource<?> r : childResources)
+            {
+               el = r.getName();
+
+               if (r instanceof DirectoryResource)
+               {
+                  el += "/";
+               }
+
+               if (showAll || !el.startsWith("."))
+               {
+                  listBuild.add(el);
+               }
             }
          }
       }
 
-      int cols = width / (maxLength + 4);
-      int colSize = width / cols;
+      /**
+       * print the results.
+       */
 
-      if (cols == 0)
+      if (list)
       {
-         colSize = width;
-         cols = 1;
-      }
-
-      int i = 0;
-      for (String s : listData)
-      {
-         shell.print(s);
-         shell.print(pad(colSize - s.length()));
-         if (++i == cols)
+         FormatCallback formatCallback = new FormatCallback()
          {
-            shell.println();
-            i = 0;
-         }
-      }
-      shell.println();
-   }
+            @Override
+            public String format(int column, String value)
+            {
+               if (column == 7 && value.endsWith("/"))
+               {
+                  return shell.renderColor(ShellColor.BLUE, value);
+               }
+               else
+               {
+                  return value;
+               }
+            }
+         };
 
-   private String pad(final int amount)
-   {
-      char[] padding = new char[amount];
-      for (int i = 0; i < amount; i++)
+         printOutTables(
+               listBuild,
+               new boolean[]{false, false, false, true, false, false, true, false},
+               shell,
+               formatCallback);
+      }
+      else
       {
-         padding[i] = ' ';
+         FormatCallback formatCallback = new FormatCallback()
+         {
+            @Override
+            public String format(int column, String value)
+            {
+               if (value.endsWith("/"))
+               {
+                  return shell.renderColor(ShellColor.BLUE, value);
+               }
+               else
+               {
+                  return value;
+               }
+            }
+         };
+
+         printOutColumns(listBuild, shell, formatCallback, false);
       }
-      return new String(padding);
    }
 
+   private static String[] getDateString(long time)
+   {
+      if (time < yearMarker)
+      {
+         return dateFormatOld.format(new Date(time)).split(" ");
+      }
+      else
+      {
+         return dateFormatRecent.format(new Date(time)).split(" ");
+      }
+   }
 }

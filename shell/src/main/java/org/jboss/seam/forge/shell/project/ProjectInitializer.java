@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,15 +19,16 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.project;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 
 import javax.enterprise.event.Event;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
 
+import org.jboss.seam.forge.project.Facet;
 import org.jboss.seam.forge.project.Project;
 import org.jboss.seam.forge.project.services.ProjectFactory;
 import org.jboss.seam.forge.shell.Shell;
@@ -40,13 +41,13 @@ import org.jboss.seam.forge.shell.plugins.events.PostStartup;
 public class ProjectInitializer
 {
    private final Shell shell;
-   private final ProjectContext cp;
+   private final CurrentProject cp;
    private final Event<InitProject> init;
 
    private final ProjectFactory projectFactory;
 
    @Inject
-   public ProjectInitializer(final Shell shell, final ProjectContext currentProjectHolder,
+   public ProjectInitializer(final Shell shell, final CurrentProject currentProjectHolder,
                             final Event<InitProject> init, final ProjectFactory projectFactory)
    {
       this.shell = shell;
@@ -63,23 +64,42 @@ public class ProjectInitializer
    public void doInit(@Observes final InitProject event)
    {
       File currentDirectory = shell.getCurrentDirectory();
-      Project currentProject;
 
-      try
+      Project newProject = null;
+
+      File newRoot = projectFactory.findProjectRootRecusively(currentDirectory);
+      if (newRoot != null)
       {
-         currentProject = projectFactory.findProjectRecursively(currentDirectory);
-      }
-      catch (FileNotFoundException e)
-      {
-         currentProject = null;
+         Project oldProject = cp.getCurrent();
+         if (oldProject != null)
+         {
+            File oldProjectRoot = oldProject.getProjectRoot();
+            if (!newRoot.equals(oldProjectRoot))
+            {
+               newProject = projectFactory.findProjectRecursively(currentDirectory);
+            }
+            else
+            {
+               newProject = oldProject;
+            }
+         }
+         else
+         {
+            newProject = projectFactory.findProjectRecursively(currentDirectory);
+         }
       }
 
-      if (currentProject != null)
+      if (newProject != null)
       {
-         shell.printlnVerbose("Current project: " + currentProject.getProjectRoot().getAbsolutePath());
+         shell.printlnVerbose("Current project: " + newProject.getProjectRoot().getAbsolutePath());
+         shell.printlnVerbose("Registered Facets:");
+         for (Facet facet : newProject.getFacets())
+         {
+            shell.printlnVerbose("\t- " + facet);
+         }
       }
 
-      cp.setCurrentProject(currentProject);
+      cp.setCurrentProject(newProject);
       shell.setDefaultPrompt();
    }
 }

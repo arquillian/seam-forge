@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,11 +19,17 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.command;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+
+import org.jboss.seam.forge.project.Resource;
 
 /**
  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
@@ -37,6 +43,8 @@ public class CommandMetadata
    private String name = "";
    private String help = "";
    private List<OptionMetadata> options = new ArrayList<OptionMetadata>();
+
+   private Set<Class<? extends Resource>> resourceScopes = Collections.emptySet();
 
    public OptionMetadata getNamedOption(final String name) throws IllegalArgumentException
    {
@@ -147,11 +155,11 @@ public class CommandMetadata
       return !getOptions().isEmpty();
    }
 
-   public boolean hasShortOption(String name)
+   public boolean hasShortOption(final String name)
    {
       for (OptionMetadata option : options)
       {
-         if (option.isNamed() &&  option.getShortName().equals(name))
+         if (option.isNamed() && option.getShortName().equals(name))
          {
             return true;
          }
@@ -159,7 +167,7 @@ public class CommandMetadata
       return false;
    }
 
-   public boolean hasOption(String name)
+   public boolean hasOption(final String name)
    {
       for (OptionMetadata option : options)
       {
@@ -169,5 +177,20 @@ public class CommandMetadata
          }
       }
       return false;
+   }
+
+   public Set<Class<? extends Resource>> getResourceScopes()
+   {
+      return resourceScopes;
+   }
+
+   public void setResourceScopes(final List<Class<? extends Resource>> resourceScopes)
+   {
+      this.resourceScopes = new HashSet<Class<? extends Resource>>(resourceScopes);
+   }
+
+   public boolean usableWithResource(final Class<? extends Resource> resource)
+   {
+      return (this.resourceScopes.size() == 0) || this.resourceScopes.contains(resource);
    }
 }

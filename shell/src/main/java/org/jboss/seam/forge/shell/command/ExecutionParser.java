@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,11 +19,13 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell.command;
 
 import java.io.File;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 
 import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
@@ -40,6 +42,7 @@ import org.jboss.seam.forge.shell.command.parser.OrderedValueVarargsOptionParser
 import org.jboss.seam.forge.shell.command.parser.ParseErrorParser;
 import org.jboss.seam.forge.shell.command.parser.Tokenizer;
 import org.jboss.seam.forge.shell.exceptions.PluginExecutionException;
+import org.jboss.seam.forge.shell.util.GeneralUtils;
 import org.mvel2.util.ParseTools;
 
 /**
@@ -56,7 +59,7 @@ public class ExecutionParser
    @Inject
    public ExecutionParser(final PluginRegistry registry, final Instance<Execution> executionInstance,
                           final Tokenizer tokenizer, final Shell shell,
-            final PromptTypeConverter promptTypeConverter)
+                          final PromptTypeConverter promptTypeConverter)
    {
       this.registry = registry;
       this.executionInstance = executionInstance;
@@ -69,7 +72,6 @@ public class ExecutionParser
    {
       Queue<String> tokens = tokenizer.tokenize(line);
 
-      Map<String, PluginMetadata> plugins = registry.getPlugins();
       Execution execution = executionInstance.get();
       execution.setOriginalStatement(line);
       CommandMetadata command = null;
@@ -77,27 +79,44 @@ public class ExecutionParser
       if (!tokens.isEmpty())
       {
          String first = tokens.remove();
-         PluginMetadata plugin = plugins.get(first);
+         PluginMetadata plugin = registry.getPluginMetadataForScopeAndConstraints(first, shell);
 
          if (plugin != null)
          {
             if (!tokens.isEmpty())
             {
                String second = tokens.peek();
-               command = plugin.getCommand(second);
+               command = plugin.getCommand(second, shell);
+
                if (command != null)
                {
                   tokens.remove();
                }
+               else if (plugin.hasDefaultCommand())
+               {
+                  command = plugin.getDefaultCommand();
+               }
             }
-
-            if (plugin.hasDefaultCommand())
+            else if (plugin.hasDefaultCommand())
             {
                command = plugin.getDefaultCommand();
             }
 
             if (command != null)
             {
+
+               if (!command.usableWithResource(shell.getCurrentResource().getClass()))
+               {
+                  // noinspection unchecked
+                  throw new PluginExecutionException(plugin, "command '"
+                           + command.getName()
+                           + "' is not usable in current scope ["
+                           + shell.getCurrentResource().getClass().getSimpleName()
+                           + "]"
+                           + " -- usable scopes: "
+                           + GeneralUtils.elementSetSimpleTypesToString((Set) command.getResourceScopes()));
+               }
+
                execution.setCommand(command);
 
                // parse parameters and set order / nulls for command invocation
@@ -108,7 +127,7 @@ public class ExecutionParser
             else
             {
                throw new PluginExecutionException(plugin, "Missing command for plugin [" + plugin.getName()
-                        + "], available commands: " + plugin.getCommands());
+                        + "], available commands: " + plugin.getCommands(shell));
             }
          }
       }

@@ -26,16 +26,21 @@ import java.io.FileFilter;
 import java.io.FileNotFoundException;
 import java.io.FilenameFilter;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
+import javax.inject.Named;
 import javax.persistence.Entity;
 
 import org.jboss.seam.forge.parser.JavaParser;
 import org.jboss.seam.forge.parser.java.JavaClass;
 import org.jboss.seam.forge.project.Facet;
+import org.jboss.seam.forge.project.PackagingType;
 import org.jboss.seam.forge.project.Project;
+import org.jboss.seam.forge.project.constraints.RequiresFacets;
+import org.jboss.seam.forge.project.constraints.RequiresPackagingTypes;
+import org.jboss.seam.forge.project.dependencies.Dependency;
+import org.jboss.seam.forge.project.dependencies.DependencyBuilder;
+import org.jboss.seam.forge.project.facets.DependencyFacet;
 import org.jboss.seam.forge.project.facets.JavaSourceFacet;
 import org.jboss.seam.forge.project.facets.ResourceFacet;
 import org.jboss.shrinkwrap.descriptor.api.DescriptorImporter;
@@ -53,14 +58,20 @@ import org.jboss.shrinkwrap.descriptor.spi.SchemaDescriptorProvider;
  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
  * 
  */
+@Named("persistence")
+@RequiresFacets({ JavaSourceFacet.class, ResourceFacet.class, DependencyFacet.class })
+@RequiresPackagingTypes({ PackagingType.JAR, PackagingType.WAR })
 public class PersistenceFacet implements Facet
 {
+   private static final Dependency dep =
+            DependencyBuilder.create("org.jboss.spec:jboss-javaee-6.0:1.0.0.CR1:provided:basic");
+
    private Project project;
 
    private final FilenameFilter entityFileFilter = new FilenameFilter()
    {
       @Override
-      public boolean accept(File dir, String name)
+      public boolean accept(final File dir, final String name)
       {
          return name.endsWith(".java");
       }
@@ -69,20 +80,11 @@ public class PersistenceFacet implements Facet
    private final FileFilter directoryFilter = new FileFilter()
    {
       @Override
-      public boolean accept(File file)
+      public boolean accept(final File file)
       {
          return file.isDirectory();
       }
    };
-
-   @Override
-   public Set<Class<? extends Facet>> getDependencies()
-   {
-      Set<Class<? extends Facet>> result = new HashSet<Class<? extends Facet>>();
-      result.add(JavaSourceFacet.class);
-      result.add(ResourceFacet.class);
-      return result;
-   }
 
    @Override
    public Project getProject()
@@ -91,10 +93,9 @@ public class PersistenceFacet implements Facet
    }
 
    @Override
-   public Facet init(final Project project)
+   public void setProject(final Project project)
    {
       this.project = project;
-      return this;
    }
 
    @Override
@@ -102,6 +103,12 @@ public class PersistenceFacet implements Facet
    {
       if (!isInstalled())
       {
+         DependencyFacet deps = project.getFacet(DependencyFacet.class);
+         if (!deps.hasDependency(dep))
+         {
+            deps.addDependency(dep);
+         }
+
          File entityRoot = getEntityPackageFile();
          if (!entityRoot.exists())
          {
@@ -109,28 +116,51 @@ public class PersistenceFacet implements Facet
             entityRoot.mkdirs();
          }
 
+         installUtils();
+
          File descriptor = getConfigFile();
          if (!descriptor.exists())
          {
-            project.writeFile("", descriptor);
-
             PersistenceUnitDef unit = Descriptors.create(PersistenceDescriptor.class)
-                  .persistenceUnit("default")
-                  .description("The Seam Forge default Persistence Unit")
-                  .transactionType(TransactionType.JTA)
-                  .provider(ProviderType.HIBERNATE)
-                  .jtaDataSource("java:/DefaultDS")
-                  .includeUnlistedClasses()
-                  .schemaGenerationMode(SchemaGenerationModeType.CREATE_DROP)
-                  .showSql()
-                  .formatSql()
-                  .property("hibernate.transaction.flush_before_completion", true);
+                     .persistenceUnit("default")
+                     .description("The Seam Forge default Persistence Unit")
+                     .transactionType(TransactionType.JTA)
+                     .provider(ProviderType.HIBERNATE)
+                     .jtaDataSource("java:/DefaultDS")
+                     .includeUnlistedClasses()
+                     .schemaGenerationMode(SchemaGenerationModeType.CREATE_DROP)
+                     .showSql()
+                     .formatSql()
+                     .property("hibernate.transaction.flush_before_completion", true);
 
             project.writeFile(unit.exportAsString(), descriptor);
          }
       }
       project.registerFacet(this);
       return this;
+   }
+
+   private void installUtils()
+   {
+      ClassLoader loader = Thread.currentThread().getContextClassLoader();
+      JavaClass util = JavaParser.parse(loader.getResourceAsStream("templates/PersistenceUtil.java"));
+      JavaClass producer = JavaParser.parse(loader.getResourceAsStream("templates/DatasourceProducer.java"));
+
+      JavaSourceFacet java = project.getFacet(JavaSourceFacet.class);
+
+      util.setPackage(java.getBasePackage() + ".persist");
+      producer.setPackage(java.getBasePackage() + ".persist");
+
+      java.saveJavaClass(producer);
+      java.saveJavaClass(util);
+   }
+
+   @Override
+   public boolean isInstalled()
+   {
+      DependencyFacet deps = project.getFacet(DependencyFacet.class);
+      boolean hasDependency = deps.hasDependency(dep);
+      return hasDependency && getEntityPackageFile().exists() && getConfigFile().exists();
    }
 
    public String getEntityPackage()
@@ -154,7 +184,7 @@ public class PersistenceFacet implements Facet
       return model;
    }
 
-   public void saveConfig(PersistenceModel model)
+   public void saveConfig(final PersistenceModel model)
    {
       PersistenceDescriptor descriptor = new PersistenceDescriptorImpl(model);
       String output = descriptor.exportAsString();
@@ -167,20 +197,14 @@ public class PersistenceFacet implements Facet
       return new File(resources.getResourceFolder() + File.separator + "META-INF" + File.separator + "persistence.xml");
    }
 
-   @Override
-   public boolean isInstalled()
-   {
-      return getEntityPackageFile().exists() && getConfigFile().exists();
-   }
-
    public List<JavaClass> getAllEntities()
    {
       File packageFile = getEntityPackageFile();
       return findEntitiesInFolder(packageFile);
    }
 
-   private List<JavaClass> findEntitiesInFolder(File packageFile)
-   {                        
+   private List<JavaClass> findEntitiesInFolder(final File packageFile)
+   {
       List<JavaClass> result = new ArrayList<JavaClass>();
       if (packageFile.exists())
       {

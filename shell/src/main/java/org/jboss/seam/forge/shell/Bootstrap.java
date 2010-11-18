@@ -1,5 +1,5 @@
 /*
- * JBoss, Home of Professional Open Source
+ * JBoss, by Red Hat.
  * Copyright 2010, Red Hat, Inc., and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
@@ -19,7 +19,12 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
+
 package org.jboss.seam.forge.shell;
+
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.enterprise.event.Observes;
 import javax.enterprise.inject.spi.BeanManager;
@@ -28,6 +33,8 @@ import javax.inject.Singleton;
 
 import org.jboss.seam.forge.shell.plugins.events.AcceptUserInput;
 import org.jboss.seam.forge.shell.plugins.events.Startup;
+import org.jboss.weld.environment.se.Weld;
+import org.jboss.weld.environment.se.WeldContainer;
 import org.jboss.weld.environment.se.events.ContainerInitialized;
 
 /**
@@ -40,10 +47,36 @@ public class Bootstrap
    @Inject
    private BeanManager manager;
 
-   public void startup(@Observes final ContainerInitialized event)
+   public static void main(String[] args)
+   {
+      initLogging();
+      Weld weld = new Weld();
+      WeldContainer container = weld.initialize();
+      BeanManager manager = container.getBeanManager();
+      manager.fireEvent(new Startup());
+      manager.fireEvent(new AcceptUserInput());
+      weld.shutdown();
+   }
+
+   private static void initLogging()
+   {
+      String[] loggerNames = new String[] { "", "main", Logger.GLOBAL_LOGGER_NAME };
+      for (String loggerName : loggerNames)
+      {
+         Logger globalLogger = Logger.getLogger(loggerName);
+         Handler[] handlers = globalLogger.getHandlers();
+         for (Handler handler : handlers)
+         {
+            handler.setLevel(Level.SEVERE);
+            globalLogger.removeHandler(handler);
+         }
+      }
+   }
+
+   @Deprecated
+   public void observeStartup(@Observes final ContainerInitialized event)
    {
       manager.fireEvent(new Startup());
       manager.fireEvent(new AcceptUserInput());
    }
-
 }
