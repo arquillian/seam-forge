@@ -22,32 +22,43 @@
 package org.jboss.seam.forge.arquillian;
 
 import java.io.File;
-import java.util.HashSet;
-import java.util.Set;
 
+import javax.enterprise.inject.Instance;
+import javax.inject.Inject;
+import javax.inject.Named;
+
+import org.jboss.seam.forge.arquillian.model.ArquillianVersion;
+import org.jboss.seam.forge.arquillian.wizard.Wizard;
+import org.jboss.seam.forge.arquillian.wizard.install.InstallArquillian;
 import org.jboss.seam.forge.project.Facet;
+import org.jboss.seam.forge.project.PackagingType;
 import org.jboss.seam.forge.project.Project;
-import org.jboss.seam.forge.project.facets.MavenFacet;
+import org.jboss.seam.forge.project.constraints.RequiresFacets;
+import org.jboss.seam.forge.project.constraints.RequiresPackagingTypes;
+import org.jboss.seam.forge.project.facets.DependencyFacet;
+import org.jboss.seam.forge.project.facets.MavenCoreFacet;
 import org.jboss.seam.forge.project.facets.ResourceFacet;
+import org.jboss.seam.forge.shell.plugins.Help;
 
 /**
  * @author <a href="mailto:aslak@redhat.com">Aslak Knutsen</a>
  * 
  */
+@Named("arquillian")
+@Help("A plugin to manage configuration of Arquillian and related Maven profiles.")
+@RequiresFacets({ MavenCoreFacet.class, DependencyFacet.class, ResourceFacet.class})
+@RequiresPackagingTypes({PackagingType.JAR, PackagingType.WAR})
 public class ArquillianFacet implements Facet
 {
    private static final String ARQUILLIAN_XML = "arquillian.xml";
    
-   private Project project;
+   @Inject
+   private Wizard wizard;
 
-   @Override
-   public Set<Class<? extends Facet>> getDependencies()
-   {
-      Set<Class<? extends Facet>> result = new HashSet<Class<? extends Facet>>();
-      result.add(MavenFacet.class);
-      result.add(ResourceFacet.class);
-      return result;
-   }
+   @Inject
+   private Instance<ArquillianVersion> installedVersion;
+   
+   private Project project;
 
    @Override
    public Project getProject()
@@ -56,10 +67,9 @@ public class ArquillianFacet implements Facet
    }
 
    @Override
-   public Facet init(final Project project)
+   public void setProject(Project project)
    {
       this.project = project;
-      return this;
    }
 
    @Override
@@ -67,7 +77,7 @@ public class ArquillianFacet implements Facet
    {
       if (!isInstalled())
       {
-         createConfigFile();
+         wizard.run(InstallArquillian.class);
       }
       project.registerFacet(this);
       return this;
@@ -76,22 +86,9 @@ public class ArquillianFacet implements Facet
    @Override
    public boolean isInstalled()
    {
-      return getConfigFile().exists();
+      return installedVersion.get() != null;
    }
    
-   private void createConfigFile()
-   {
-      File arquillianConfig = getConfigFile();
-      try
-      {
-         arquillianConfig.createNewFile();
-      }
-      catch (Exception e) 
-      {
-         throw new RuntimeException("Could not create configuraton file, " + arquillianConfig.getAbsolutePath(), e);
-      }
-   }
-
    /**
     * Get the Arquillian XML configuration. 
     * 
@@ -101,5 +98,20 @@ public class ArquillianFacet implements Facet
    {
       ResourceFacet resources = project.getFacet(ResourceFacet.class);
       return new File(resources.getTestResourceFolder(), ARQUILLIAN_XML);
+   }
+   
+   public void getIntalledVersion()
+   {
+      
+   }
+   
+   public void getInstalledProfiles()
+   {
+      
+   }
+   
+   public void getInstalledTestFramework()
+   {
+      
    }
 }

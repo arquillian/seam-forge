@@ -32,14 +32,14 @@ import org.apache.maven.model.Profile;
 import org.jboss.seam.forge.arquillian.ArquillianFacet;
 import org.jboss.seam.forge.arquillian.plugins.profile.ProfileCreator;
 import org.jboss.seam.forge.project.Project;
-import org.jboss.seam.forge.project.facets.MavenFacet;
+import org.jboss.seam.forge.project.constraints.RequiresFacet;
+import org.jboss.seam.forge.project.constraints.RequiresProject;
+import org.jboss.seam.forge.project.facets.MavenCoreFacet;
 import org.jboss.seam.forge.shell.Shell;
 import org.jboss.seam.forge.shell.plugins.DefaultCommand;
 import org.jboss.seam.forge.shell.plugins.Help;
 import org.jboss.seam.forge.shell.plugins.Option;
 import org.jboss.seam.forge.shell.plugins.Plugin;
-import org.jboss.seam.forge.shell.plugins.RequiresFacet;
-import org.jboss.seam.forge.shell.plugins.RequiresProject;
 
 /**
  * @author <a href="mailto:aslak@redhat.com">Aslak Knutsen</a>
@@ -92,7 +92,7 @@ public class NewProfilePlugin implements Plugin
       }
       
       
-      MavenFacet maven = project.getFacet(MavenFacet.class);
+      MavenCoreFacet maven = project.getFacet(MavenCoreFacet.class);
 
       Model mavenModel = maven.getPOM();
       List<Profile> profiles = mavenModel.getProfiles();

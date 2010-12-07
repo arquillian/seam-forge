@@ -14,33 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jboss.seam.forge.arquillian;
-
-import java.io.IOException;
-
-import org.jboss.seam.forge.arquillian.ArquillianFacet;
-import org.jboss.seam.forge.test.SingletonAbstractShellTest;
-import org.junit.Before;
+package org.jboss.seam.forge.arquillian.wizard;
 
 /**
- * 
+ * WizardDataProvider
  *
  * @author <a href="mailto:aslak@redhat.com">Aslak Knutsen</a>
  * @version $Revision: $
  */
-public class AbstractTestBase extends SingletonAbstractShellTest
+public interface WizardDataProvider<T>
 {
-   @Before
-   @Override
-   public void beforeTest() throws IOException
-   {
-      super.beforeTest();
-      initializeJavaProject();
-      if ((getProject() != null) && !getProject().hasFacet(ArquillianFacet.class))
-      {
-         queueInputLines("4", "1");
-         getShell().execute("install arquillian");
-      }
-   }
-
+   T get();
 }

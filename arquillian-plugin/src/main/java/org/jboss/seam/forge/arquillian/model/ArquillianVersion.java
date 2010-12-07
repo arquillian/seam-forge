@@ -14,33 +14,44 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jboss.seam.forge.arquillian;
+package org.jboss.seam.forge.arquillian.model;
 
-import java.io.IOException;
-
-import org.jboss.seam.forge.arquillian.ArquillianFacet;
-import org.jboss.seam.forge.test.SingletonAbstractShellTest;
-import org.junit.Before;
 
 /**
- * 
+ * ArquillianVersion
  *
  * @author <a href="mailto:aslak@redhat.com">Aslak Knutsen</a>
  * @version $Revision: $
  */
-public class AbstractTestBase extends SingletonAbstractShellTest
+public class ArquillianVersion
 {
-   @Before
-   @Override
-   public void beforeTest() throws IOException
-   {
-      super.beforeTest();
-      initializeJavaProject();
-      if ((getProject() != null) && !getProject().hasFacet(ArquillianFacet.class))
-      {
-         queueInputLines("4", "1");
-         getShell().execute("install arquillian");
-      }
-   }
+   private String version;
+   private String propertyName;
 
+   public ArquillianVersion(String version, String propertyName)
+   {
+      this.version = version;
+      this.propertyName = propertyName;
+   }
+   
+   /**
+    * @return the version
+    */
+   public String getVersion()
+   {
+      return version;
+   }
+   
+   /**
+    * @return the propertyName
+    */
+   public String getPropertyName()
+   {
+      return propertyName;
+   }
+   
+   public String getPropertyExpression()
+   {
+      return "${" + getPropertyName() + "}";
+   }
 }

@@ -16,8 +16,12 @@
  */
 package org.jboss.seam.forge.arquillian.plugins.profile;
 
-import org.apache.maven.model.Dependency;
+import javax.enterprise.inject.Instance;
+import javax.inject.Inject;
+
 import org.apache.maven.model.Profile;
+import org.jboss.seam.forge.arquillian.model.ArquillianVersion;
+import org.jboss.seam.forge.arquillian.util.MavenUtil;
 
 /**
  * JBossASRemote
@@ -27,6 +31,9 @@ import org.apache.maven.model.Profile;
  */
 public class JBossASRemote implements ProfileCreator
 {
+   @Inject
+   private Instance<ArquillianVersion> installedVersion;
+   
    @Override
    public String getName()
    {
@@ -42,18 +49,17 @@ public class JBossASRemote implements ProfileCreator
    @Override
    public void create(Profile profile, String version)
    {
-      profile.addDependency(createDependency("org.jboss.arquillian.container", "arquillian-jbossas-remote-6", "jar", "1.0.0.Alpha4"));
-      profile.addDependency(createDependency("org.jboss.jbossas", "jboss-as-client", "pom", version));
-   }
-   
-   private Dependency createDependency(String group, String artifact, String type, String version)
-   {
-      Dependency dependency = new Dependency();
-      dependency.setGroupId(group);
-      dependency.setArtifactId(artifact);
-      dependency.setType(type);
-      dependency.setVersion(version);
-      
-      return dependency;
+      profile.addDependency(
+            MavenUtil.createDependency(
+                  "org.jboss.arquillian.container", 
+                  "arquillian-jbossas-remote-6", 
+                  "jar", 
+                  installedVersion.get().getPropertyExpression()));
+      profile.addDependency(
+            MavenUtil.createDependency(
+                  "org.jboss.jbossas", 
+                  "jboss-as-client", 
+                  "pom", 
+                  version));
    }
 }

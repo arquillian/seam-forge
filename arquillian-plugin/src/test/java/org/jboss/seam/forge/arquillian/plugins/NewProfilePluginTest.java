@@ -1,4 +1,4 @@
-package org.jboss.seam.forge.arquillian.test.plugins;
+package org.jboss.seam.forge.arquillian.plugins;
 
 /*
  * JBoss, Home of Professional Open Source
@@ -26,7 +26,7 @@ import junit.framework.Assert;
 
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.seam.forge.arquillian.AbstractTestBase;
-import org.jboss.seam.forge.project.facets.MavenFacet;
+import org.jboss.seam.forge.project.facets.MavenCoreFacet;
 import org.jboss.seam.forge.shell.Shell;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -47,7 +47,7 @@ public class NewProfilePluginTest extends AbstractTestBase
       Shell shell = getShell();
       shell.execute("new-test-profile --named " + profileName + " --container jbossas --type remote --version 6.0.0.20100911-M5");
       
-      MavenFacet maven = getProject().getFacet(MavenFacet.class);
+      MavenCoreFacet maven = getProject().getFacet(MavenCoreFacet.class);
       Assert.assertEquals(
             "Verify a Profile with the same id was added",
             profileName, 
@@ -62,7 +62,7 @@ public class NewProfilePluginTest extends AbstractTestBase
       Shell shell = getShell();
       shell.execute("new-test-profile --named " + profileName + " --container missing-contianer --type remote --version 6.0.0.20100911-M5");
 
-      MavenFacet maven = getProject().getFacet(MavenFacet.class);
+      MavenCoreFacet maven = getProject().getFacet(MavenCoreFacet.class);
       Assert.assertEquals(
             "Verify no Profiles were added",
             0, maven.getPOM().getProfiles().size());
@@ -77,7 +77,7 @@ public class NewProfilePluginTest extends AbstractTestBase
       shell.execute("new-test-profile --named " + profileName + " --container jbossas --type remote --version 6.0.0.20100911-M5");
       shell.execute("new-test-profile --named " + profileName + " --container jbossas --type remote --version 6.0.0.20100911-M5");
 
-      MavenFacet maven = getProject().getFacet(MavenFacet.class);
+      MavenCoreFacet maven = getProject().getFacet(MavenCoreFacet.class);
       Assert.assertEquals(
             "Verify no Profiles were added",
             1, maven.getPOM().getProfiles().size());

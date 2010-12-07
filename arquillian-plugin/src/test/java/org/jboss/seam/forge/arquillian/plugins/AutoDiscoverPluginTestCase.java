@@ -14,33 +14,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jboss.seam.forge.arquillian;
+package org.jboss.seam.forge.arquillian.plugins;
 
-import java.io.IOException;
+import org.jboss.arquillian.junit.Arquillian;
+import org.jboss.seam.forge.arquillian.AbstractTestBase;
+import org.jboss.seam.forge.project.Project;
+import org.jboss.seam.forge.shell.Shell;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
-import org.jboss.seam.forge.arquillian.ArquillianFacet;
-import org.jboss.seam.forge.test.SingletonAbstractShellTest;
-import org.junit.Before;
 
 /**
- * 
+ * AutoDiscoverPluginTestCase
  *
  * @author <a href="mailto:aslak@redhat.com">Aslak Knutsen</a>
  * @version $Revision: $
  */
-public class AbstractTestBase extends SingletonAbstractShellTest
+@RunWith(Arquillian.class)
+public class AutoDiscoverPluginTestCase extends AbstractTestBase
 {
-   @Before
-   @Override
-   public void beforeTest() throws IOException
+   @Test
+   public void shouldBeAbleToCreateAEJB() throws Exception
    {
-      super.beforeTest();
-      initializeJavaProject();
-      if ((getProject() != null) && !getProject().hasFacet(ArquillianFacet.class))
-      {
-         queueInputLines("4", "1");
-         getShell().execute("install arquillian");
-      }
+      Project project = getProject();
+      Shell shell = getShell();
+      
+      queueInputLines("1", "", "n");
+      shell.execute("new-ejb --named ResourceService");
+      
+      queueInputLines("", "", "");
+      shell.execute("arquillian-autodiscover");
    }
-
 }

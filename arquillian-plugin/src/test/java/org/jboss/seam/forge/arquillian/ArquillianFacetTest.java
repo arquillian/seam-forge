@@ -23,7 +23,6 @@
 package org.jboss.seam.forge.arquillian;
 
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 
 import java.io.File;
 
@@ -31,7 +30,6 @@ import junit.framework.Assert;
 
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.seam.forge.project.Project;
-import org.jboss.seam.forge.shell.Shell;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -45,22 +43,12 @@ public class ArquillianFacetTest extends AbstractTestBase
    @Test
    public void testCDintoProjectRegistersScaffoldingFacet() throws Exception
    {
-      Shell shell = getShell();
       Project project = getProject();
 
       ArquillianFacet arquillian = project.getFacet(ArquillianFacet.class);
       assertNotNull(arquillian);
-
-      shell.execute("cd /");
-      assertNull(getProject());
-
-      shell.execute("cd - ");
-      assertNotNull(getProject());
-
-      project = getProject();
-
-      arquillian = project.getFacet(ArquillianFacet.class);
-      assertNotNull(arquillian);
+      
+      System.out.println(project.getFacets());
    }
 
    @Test
